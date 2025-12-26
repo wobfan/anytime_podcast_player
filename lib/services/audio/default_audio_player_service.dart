@@ -425,7 +425,9 @@ class DefaultAudioPlayerService extends AudioPlayerService {
       }
     }
 
-    await PersistentState.clearState();
+    // skip clearState to always keep a last state, in case the app may
+    // crash or force closed before the next persistState call
+    // await PersistentState.clearState();
 
     _episodeEvent.sink.add(_currentEpisode);
 
