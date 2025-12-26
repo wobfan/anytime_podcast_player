@@ -465,8 +465,9 @@ class DefaultAudioPlayerService extends AudioPlayerService {
   Future<void> _persistState() async {
     var currentPosition = _audioHandler.playbackState.value.position.inMilliseconds;
 
-    /// We only need to persist if we are paused.
-    if (_playingState.value == AudioState.pausing) {
+    /// Persist if we are paused or playing
+    if (_currentEpisode != null &&
+        (_playingState.value == AudioState.pausing || _playingState.value == AudioState.playing)) {
       await PersistentState.persistState(Persistable(
         pguid: '',
         episodeId: _currentEpisode!.id!,
@@ -876,6 +877,7 @@ class _DefaultAudioPlayerHandler extends BaseAudioHandler with SeekHandler {
   AudioPipeline? _audioPipeline;
   late AudioPlayer _player;
   MediaItem? _currentItem;
+  DateTime? _lastHandlerPersistTime;
 
   static const MediaControl rewindControl = MediaControl(
     androidIcon: 'drawable/ic_action_rewind_10',
@@ -931,6 +933,11 @@ class _DefaultAudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       log.fine(error.toString());
 
       _player.stop();
+    });
+
+    // Listen to position updates for background persistence
+    _player.positionStream.listen((position) {
+      _maybePersistInBackground();
     });
   }
 
@@ -1164,6 +1171,28 @@ class _DefaultAudioPlayerHandler extends BaseAudioHandler with SeekHandler {
       }
     } else {
       log.fine(' - Cannot save position as episode is null');
+    }
+  }
+
+  /// Persist state periodically during background playback (every 2 minutes)
+  Future<void> _maybePersistInBackground() async {
+    if (_currentItem != null && _player.playing) {
+      if (_lastHandlerPersistTime == null ||
+          DateTime.now().difference(_lastHandlerPersistTime!) >= const Duration(minutes: 2)) {
+        var currentPosition = playbackState.value.position.inMilliseconds;
+        var storedEpisode = await repository.findEpisodeByGuid(_currentItem!.extras!['eid'] as String);
+
+        if (storedEpisode != null) {
+          await PersistentState.persistState(Persistable(
+            pguid: '',
+            episodeId: storedEpisode.id!,
+            position: currentPosition,
+            state: LastState.paused,
+          ));
+          _lastHandlerPersistTime = DateTime.now();
+          log.fine('Background persistence at position $currentPosition');
+        }
+      }
     }
   }
 }
