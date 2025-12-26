@@ -1174,11 +1174,11 @@ class _DefaultAudioPlayerHandler extends BaseAudioHandler with SeekHandler {
     }
   }
 
-  /// Persist state periodically during background playback (every 2 minutes)
+  /// Persist state periodically during background playback (every minute)
   Future<void> _maybePersistInBackground() async {
     if (_currentItem != null && _player.playing) {
       if (_lastHandlerPersistTime == null ||
-          DateTime.now().difference(_lastHandlerPersistTime!) >= const Duration(minutes: 2)) {
+          DateTime.now().difference(_lastHandlerPersistTime!) >= const Duration(minutes: 1)) {
         var currentPosition = playbackState.value.position.inMilliseconds;
         var storedEpisode = await repository.findEpisodeByGuid(_currentItem!.extras!['eid'] as String);
 
