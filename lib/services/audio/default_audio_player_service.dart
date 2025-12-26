@@ -124,7 +124,11 @@ class DefaultAudioPlayerService extends AudioPlayerService {
   }
 
   @override
-  Future<void> pause() async => _audioHandler.pause();
+  Future<void> pause() async {
+    _audioHandler.pause();
+    // persist state on pause here to avoid possible i/o issues?
+    _persistState();
+  }
 
   @override
   Future<void> play() {
@@ -386,6 +390,7 @@ class DefaultAudioPlayerService extends AudioPlayerService {
 
           if (extras != null && extras['eid'] != null) {
             _currentEpisode = await repository.findEpisodeByGuid(extras['eid'] as String);
+            _updateQueueState();
           }
         }
       } else {
@@ -398,20 +403,25 @@ class DefaultAudioPlayerService extends AudioPlayerService {
           _playingState.add(AudioState.pausing);
 
           updateCurrentPosition(_currentEpisode);
+          _updateQueueState();
 
           _cold = true;
         }
       }
     } else {
-      final playbackState = _audioHandler.playbackState.value;
-      final basicState = playbackState.processingState;
+      // skip this if cold is set to true as resume() is called twice on startup
+      // otherwise causes audiostate to be stopped, and in turn the mini player doesnt show
+      if (!_cold) {
+        final playbackState = _audioHandler.playbackState.value;
+        final basicState = playbackState.processingState;
 
-      // If we have no state we'll have to assume we stopped whilst suspended.
-      if (basicState == AudioProcessingState.idle) {
-        /// We will have to assume we have stopped.
-        _playingState.add(AudioState.stopped);
-      } else if (basicState == AudioProcessingState.ready) {
-        _startPositionTicker();
+        // If we have no state we'll have to assume we stopped whilst suspended.
+        if (basicState == AudioProcessingState.idle) {
+          /// We will have to assume we have stopped.
+          _playingState.add(AudioState.stopped);
+        } else if (basicState == AudioProcessingState.ready) {
+          _startPositionTicker();
+        }
       }
     }
 
